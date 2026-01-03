@@ -3,20 +3,22 @@ import axios from "axios";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
+import { useSpeechSynthesis } from "react-speech-kit";
 
 const App = () => {
   const { transcript, listening, resetTranscript } = useSpeechRecognition();
+
+  const { speak, voices } = useSpeechSynthesis();
 
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   // Speak text
-  const speak = (text) => {
+  const speakText = (text) => {
     if (!text) return;
-    window.speechSynthesis.cancel();
-    const msg = new SpeechSynthesisUtterance(text);
-    window.speechSynthesis.speak(msg);
+  
+    speak({ text, voice: voices.find(v => v.lang.includes("en") )});
   };
 
   // Send transcript to backend
@@ -31,17 +33,15 @@ const App = () => {
         query: text,
       });
 
-      console.log(res.data);
-
       const aiText = res.data
 
       if (!aiText) throw new Error("No AI response");
 
       setAnswer(aiText);
-      speak(aiText);
+      speakText(aiText);
     } catch (err) {
       setError("Something went wrong");
-      speak("Something went wrong");
+      speakText("Something went wrong");
     } finally {
       setLoading(false);
       resetTranscript();
