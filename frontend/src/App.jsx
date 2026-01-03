@@ -1,64 +1,86 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
-import ReactMarkdown from "react-markdown";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
 
 const App = () => {
+  const { transcript, listening, resetTranscript } =
+    useSpeechRecognition();
 
+  const [answer, setAnswer] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const {
-    transcript,
-    listening,
-    resetTranscript,
-    browserSupportsSpeechRecognition,
-  } = useSpeechRecognition();
+  // Speak text
+  const speak = (text) => {
+    if (!text) return;
+    window.speechSynthesis.cancel();
+    const msg = new SpeechSynthesisUtterance(text);
+    window.speechSynthesis.speak(msg);
+  };
 
-  const [result, setResult] = useState("");
+  // Send transcript to backend
+  const sendQuery = async (text) => {
+    if (!text) return;
 
-  const handleSend = async () => {
-    if(!transcript) return;
     setLoading(true);
+    setError("");
+
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api`, {
-        query:transcript,
-      });
-      console.log(res);
-      setResult(res.data.candidates[0].content.parts[0].text);
-    } catch (error) {
-      console.log(error);
-      setResult("Something went wrong.");
+      const res = await axios.post(
+        `${import.meta.env.VITE_API_URL}/api`,
+        { query: text }
+      );
+
+      console.log(res.data)
+
+      const aiText = res.data?.text;
+
+
+
+      if (!aiText) throw new Error("No AI response");
+
+      setAnswer(aiText);
+      speak(aiText);
+    } catch (err) {
+      setError("Something went wrong");
+      speak("Something went wrong");
     } finally {
       setLoading(false);
+      resetTranscript();
     }
   };
 
+  // Auto send after user stops speaking
   useEffect(() => {
-    
-    const timerId = setTimeout(()=>{
-      handleSend()
-    },[2000])
-    
-    return ()=>{
-       clearInterval(timerId)
-    }
+    if (!transcript || loading) return;
+
+    const timer = setTimeout(() => {
+      sendQuery(transcript);
+    }, 1500);
+
+    return () => clearTimeout(timer);
   }, [transcript]);
 
   return (
-    <div className="p-5">
+    <div style={{ padding: 40 }}>
+      <h1>AI Voice Assistant</h1>
 
+      <button onClick={() => SpeechRecognition.startListening()}>
+        🎤 Start
+      </button>
 
-       <ReactMarkdown>
-          {result}
-        </ReactMarkdown>
+      <button onClick={SpeechRecognition.stopListening}>
+        ⏹ Stop
+      </button>
 
-      <p>Microphone: {listening ? "on" : "off"}</p>
-      <button onClick={SpeechRecognition.startListening}>Start</button>
-      <button onClick={SpeechRecognition.stopListening}>Stop</button>
-      <button onClick={resetTranscript}>Reset</button>
-      <p>{transcript}</p>
+      <p><b>Listening:</b> {listening ? "Yes" : "No"}</p>
+      <p><b>You:</b> {transcript}</p>
 
+      {loading && <p>Thinking...</p>}
+      {answer && <p><b>AI:</b> {answer}</p>}
+      {error && <p style={{ color: "red" }}>{error}</p>}
     </div>
   );
 };

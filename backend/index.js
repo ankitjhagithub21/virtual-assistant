@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+
 const app = express();
 const port = process.env.PORT || 8080;
 
@@ -13,29 +14,72 @@ app.use(
   })
 );
 
+// System instruction for the AI
+const systemInstruction = `You are a helpful AI voice assistant.
 
+IMPORTANT RULES:
+1. Keep responses SHORT (2-4 sentences max) - this is for voice output
+2. Use simple, conversational language
+3. No markdown, no bullet points, no special formatting
+4. No emojis
+5. If user speaks Hindi, respond in Hindi only
+6. If user speaks English, respond in English only
+7. Never mix languages in one response
+8. Be friendly and helpful like a personal assistant
+9. If you don't know something, admit it honestly
+10. Avoid technical jargon
+
+TONE: Friendly, clear, calm, helpful
+
+Remember: Your response will be spoken aloud, so keep it natural and concise.`;
 
 app.post("/api", async (req, res) => {
   const { query } = req.body;
 
-   if (!query) {
+  if (!query) {
     return res.status(400).json({ message: "Query is required" });
   }
 
-  // parts.push({text:query})
-
+  // FIXED: Correct payload structure for Gemini API
   const payload = {
+    system_instruction: {
+      parts: [{ text: systemInstruction }]
+    },
     contents: [
       {
-        parts: [{ text: query }],
-      },
-
+        role: "user",
+        parts: [{ text: query }]
+      }
     ],
+    generationConfig: {
+      temperature: 0.7,
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 256, // Keep responses short for voice
+    },
+    safetySettings: [
+      {
+        category: "HARM_CATEGORY_HARASSMENT",
+        threshold: "BLOCK_MEDIUM_AND_ABOVE"
+      },
+      {
+        category: "HARM_CATEGORY_HATE_SPEECH",
+        threshold: "BLOCK_MEDIUM_AND_ABOVE"
+      },
+      {
+        category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        threshold: "BLOCK_MEDIUM_AND_ABOVE"
+      },
+      {
+        category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+        threshold: "BLOCK_MEDIUM_AND_ABOVE"
+      }
+    ]
   };
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -44,15 +88,37 @@ app.post("/api", async (req, res) => {
         body: JSON.stringify(payload),
       }
     );
-    const data = await response.json();
-    
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Gemini API Error:", errorData);
+      return res.status(response.status).json({ 
+        message: "AI service error",
+        error: errorData 
+      });
+    }
+
+    const resData = await response.json();
+
+    const data = resData?.candidates?.[0]?.content?.parts?.[0]?.text
+    // Validate response structure
+    if (!data) {
+      console.error("Invalid response structure:", data);
+      return res.status(500).json({ message: "Invalid AI response" });
+    }
+
     return res.json(data);
   } catch (error) {
-    console.log(error);
+    console.error("Server error:", error);
     return res.status(500).json({ message: "Something went wrong" });
   }
 });
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+  console.log(`🚀 Server listening on port ${port}`);
 });
