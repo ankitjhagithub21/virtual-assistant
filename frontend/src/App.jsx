@@ -3,22 +3,32 @@ import axios from "axios";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
-import { useSpeechSynthesis } from "react-speech-kit";
+
 
 const App = () => {
   const { transcript, listening, resetTranscript } = useSpeechRecognition();
-
-  const { speak, voices } = useSpeechSynthesis();
 
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   // Speak text
-  const speakText = (text) => {
+  const speakText = (text, lang = "en-IN") => {
     if (!text) return;
-  
-    speak({ text, voice: voices.find(v => v.lang.includes("en") )});
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+
+    const voices = window.speechSynthesis.getVoices();
+    utterance.voice =
+      voices.find((v) => v.lang === lang) ||
+      voices.find((v) => v.lang.includes("en"));
+
+    window.speechSynthesis.speak(utterance);
   };
 
   // Send transcript to backend
@@ -33,7 +43,7 @@ const App = () => {
         query: text,
       });
 
-      const aiText = res.data
+      const aiText = res.data;
 
       if (!aiText) throw new Error("No AI response");
 
@@ -261,30 +271,7 @@ const App = () => {
             </div>
           </div>
         )}
-
-        {/* Footer */}
-        <div className="text-center mt-8 text-gray-500 text-xs">
-          <p>Powered by AI • Speak naturally in any language</p>
-        </div>
       </div>
-
-      {/* Custom Styles */}
-      <style>{`
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        .animate-fade-in {
-          animation: fade-in 0.3s ease-out forwards;
-        }
-      `}</style>
     </div>
   );
 };
